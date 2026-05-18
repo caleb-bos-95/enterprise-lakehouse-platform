@@ -1,0 +1,75 @@
+# =============================================================================
+# Enterprise Lakehouse Platform — Spark Processing Stack
+# =============================================================================
+# Depends on: docker-compose.yml (minio, lakehouse-net)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.spark.yml up -d
+#
+# Or via Makefile:
+#   make up-spark
+#
+# Spark Master UI: http://localhost:8181
+# =============================================================================
+
+version: "3.9"
+
+networks:
+  lakehouse-net:
+    external: true
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Spark Master
+  # UI: http://localhost:8181
+  # Submit endpoint: spark://localhost:7077
+  # ---------------------------------------------------------------------------
+  spark-master:
+    image: bitnami/spark:3.5
+    container_name: lakehouse-spark-master
+    restart: unless-stopped
+    environment:
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+      SPARK_MASTER_WEBUI_PORT: 8080
+      # S3A config for MinIO access
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-password123}
+    ports:
+      - "8181:8080"   # Spark Master UI (mapped to avoid conflict with Redpanda console)
+      - "7077:7077"   # Spark submit port
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Spark Worker (scale with: docker compose ... up --scale spark-worker=N)
+  # ---------------------------------------------------------------------------
+  spark-worker:
+    image: bitnami/spark:3.5
+    container_name: lakehouse-spark-worker
+    restart: unless-stopped
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-password123}
+    networks:
+      - lakehouse-net
+    depends_on:
+      spark-master:
+        condition: service_healthy

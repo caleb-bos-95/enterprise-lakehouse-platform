@@ -1,0 +1,107 @@
+# =============================================================================
+# Bronze Source Registry
+# =============================================================================
+# This file is the single source of truth for raw ingestion. Each entry
+# defines one source; the bronze_raw_ingest job iterates over enabled
+# entries and writes them into the lakehouse.bronze.* Iceberg namespace.
+#
+# Validation:
+#   The file is validated against sources.schema.json at load time. CI
+#   runs the same validation. Misconfig fails fast — before Spark starts.
+#
+# Onboarding a new source:
+#   1. Add an entry below.
+#   2. Pick a handler type. Currently supported: `file`, `jdbc`.
+#   3. Set the target namespace + table.
+#   4. Provide handler-specific options.
+#   5. Run `make validate-sources` (or `pytest tests/spark/test_config_loader.py`).
+#
+# Secrets:
+#   JDBC credentials are referenced by env-var name (user_env / password_env).
+#   Never put plaintext credentials in this file — it is committed to git.
+# =============================================================================
+
+version: 1
+
+defaults:
+  # Informational only at present. Future versions may merge these into
+  # each source entry to reduce repetition (e.g. shared owner, tags).
+  layer: bronze
+  catalog: lakehouse
+
+sources:
+
+  # ---------------------------------------------------------------------------
+  # banksim_transactions
+  #   The Banksim synthetic payments dataset used to seed Bronze for local
+  #   development and fraud-detection demos. Lives in the repo under
+  #   datasets/raw/ and is mounted into the Spark container at /opt/datasets.
+  # ---------------------------------------------------------------------------
+  - name: banksim_transactions
+    description: >
+      Synthetic banking transactions used as the seed dataset for
+      fraud-detection pipelines in the Silver and Gold layers.
+    owner: data-platform-team
+    type: file
+    enabled: true
+    tags: [payments, demo, banksim]
+    target:
+      namespace: bronze
+      table: banksim_transactions
+    partition_by: []
+    options:
+      path: "file:///opt/datasets/raw/bs140513_032310.csv"
+      format: csv
+      reader_options:
+        header: "true"
+        inferSchema: "false"
+        delimiter: ","
+        quote: "'"
+
+  # ---------------------------------------------------------------------------
+  # banksim_network
+  #   Companion network dataset for the Banksim demos. Demonstrates how
+  #   the same handler trivially supports a second file source.
+  # ---------------------------------------------------------------------------
+  - name: banksim_network
+    description: Banksim merchant-customer network edges.
+    owner: data-platform-team
+    type: file
+    enabled: true
+    tags: [payments, demo, banksim, graph]
+    target:
+      namespace: bronze
+      table: banksim_network
+    options:
+      path: "file:///opt/datasets/raw/bsNET140513_032310.csv"
+      format: csv
+      reader_options:
+        header: "true"
+        inferSchema: "false"
+
+  # ---------------------------------------------------------------------------
+  # postgres_orders
+  #   JDBC source example. Disabled by default — wire credentials and
+  #   flip `enabled: true` to onboard. Demonstrates parallel JDBC reads.
+  # ---------------------------------------------------------------------------
+  - name: postgres_orders
+    description: Operational orders table pulled hourly from the OLTP Postgres.
+    owner: commerce-data-team
+    type: jdbc
+    enabled: false
+    tags: [commerce, oltp, hourly]
+    target:
+      namespace: bronze
+      table: postgres_orders
+    partition_by: []
+    options:
+      url: "jdbc:postgresql://postgres:5432/commerce"
+      driver: "org.postgresql.Driver"
+      user_env: "BRONZE_PG_USER"
+      password_env: "BRONZE_PG_PASSWORD"
+      dbtable: "public.orders"
+      partition_column: "id"
+      lower_bound: 1
+      upper_bound: 10000000
+      num_partitions: 8
+      fetch_size: 5000

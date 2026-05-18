@@ -1,0 +1,49 @@
+# =============================================================================
+# Enterprise Lakehouse Platform — Trino Query Engine
+# =============================================================================
+# Depends on: docker-compose.yml (minio, lakehouse-net)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.trino.yml up -d
+#
+# Or via Makefile:
+#   make up-trino
+#
+# Trino UI: http://localhost:8090
+# CLI:      docker exec -it lakehouse-trino trino
+# =============================================================================
+
+version: "3.9"
+
+networks:
+  lakehouse-net:
+    external: true
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Trino Coordinator — federated SQL query engine over Iceberg tables
+  # UI:  http://localhost:8090
+  # JDBC: jdbc:trino://localhost:8090/iceberg
+  # ---------------------------------------------------------------------------
+  trino:
+    image: trinodb/trino:442
+    container_name: lakehouse-trino
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./configs/trino/config.properties:/etc/trino/config.properties:ro
+      - ./configs/trino/jvm.config:/etc/trino/jvm.config:ro
+      - ./configs/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties:ro
+      - ./configs/trino/catalog/tpch.properties:/etc/trino/catalog/tpch.properties:ro
+    networks:
+      - lakehouse-net
+    depends_on:
+      - minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s

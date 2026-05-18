@@ -1,0 +1,121 @@
+# =============================================================================
+# Enterprise Lakehouse Platform — OpenMetadata Governance Stack
+# =============================================================================
+# Depends on: docker-compose.yml (lakehouse-net)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.governance.yml up -d
+#
+# Or via Makefile:
+#   make up-governance
+#
+# NOTE: This stack requires ~4GB RAM. Ensure Docker Desktop is allocated
+#       at least 6GB total when running with other stacks.
+#
+# OpenMetadata UI: http://localhost:8585
+# Default login:   admin@open-metadata.org / admin
+# =============================================================================
+
+version: "3.9"
+
+networks:
+  lakehouse-net:
+    external: true
+
+volumes:
+  om_mysql_data:
+  om_es_data:
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # MySQL — OpenMetadata metadata backend
+  # ---------------------------------------------------------------------------
+  om-mysql:
+    image: mysql:8.0
+    container_name: lakehouse-om-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${OM_MYSQL_ROOT_PASSWORD:-openmetadata_password}
+      MYSQL_DATABASE: openmetadata_db
+      MYSQL_USER: openmetadata_user
+      MYSQL_PASSWORD: ${OM_MYSQL_PASSWORD:-openmetadata_password}
+    volumes:
+      - om_mysql_data:/var/lib/mysql
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${OM_MYSQL_ROOT_PASSWORD:-openmetadata_password}"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Elasticsearch — OpenMetadata search and indexing backend
+  # ---------------------------------------------------------------------------
+  om-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: lakehouse-om-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - om_es_data:/usr/share/elasticsearch/data
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # OpenMetadata Server
+  # UI: http://localhost:8585
+  # ---------------------------------------------------------------------------
+  openmetadata-server:
+    image: openmetadata/server:1.3.4
+    container_name: lakehouse-openmetadata
+    restart: unless-stopped
+    ports:
+      - "8585:8585"
+      - "8586:8586"
+    environment:
+      OPENMETADATA_CLUSTER_NAME: ${OPENMETADATA_CLUSTER_NAME:-lakehouse}
+      SERVER_PORT: 8585
+      SERVER_ADMIN_PORT: 8586
+      LOG_LEVEL: INFO
+      # Database
+      DB_DRIVER_CLASS: com.mysql.cj.jdbc.Driver
+      DB_SCHEME: mysql
+      DB_PARAMS: allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: ${OM_MYSQL_PASSWORD:-openmetadata_password}
+      DB_HOST: om-mysql
+      DB_PORT: 3306
+      OM_DATABASE: openmetadata_db
+      # Elasticsearch
+      ELASTICSEARCH_HOST: om-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      # Auth
+      AUTHENTICATION_PROVIDER: basic
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+      AUTHORIZER_CONTAINER_REQUEST_FILTER: org.openmetadata.service.security.JwtFilter
+    networks:
+      - lakehouse-net
+    depends_on:
+      om-mysql:
+        condition: service_healthy
+      om-elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8585/api/v1/system/version"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 60s

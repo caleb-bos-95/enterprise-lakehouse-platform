@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lakehouse.platform/schemas/sources.schema.json",
+  "title": "Bronze Source Registry",
+  "description": "Schema for the config-driven Bronze ingestion source registry consumed by spark.jobs.bronze.bronze_raw_ingest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "sources"],
+  "properties": {
+    "version": {
+      "description": "Registry schema version. Bumped on breaking changes.",
+      "type": "integer",
+      "enum": [1]
+    },
+    "defaults": {
+      "description": "Optional defaults merged into each source entry. Currently informational only.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/source" }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "target", "options"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$",
+          "description": "Unique source identifier. Lowercase snake_case, 3-64 chars."
+        },
+        "description": { "type": "string" },
+        "owner": {
+          "type": "string",
+          "description": "Owning team or individual. Surfaces in OpenMetadata."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["file", "jdbc"],
+          "description": "Handler key. Must match a registered SourceHandler.type_key."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["namespace", "table"],
+          "properties": {
+            "namespace": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$"
+            },
+            "table": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,127}$"
+            }
+          }
+        },
+        "partition_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Identity partition columns. Hidden partitioning transforms are a future extension."
+        },
+        "options": {
+          "type": "object",
+          "description": "Handler-specific options. Validated by the handler at read time.",
+          "additionalProperties": true
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "file" } } },
+          "then": {
+            "properties": {
+              "options": {
+                "type": "object",
+                "required": ["path", "format"],
+                "properties": {
+                  "path": { "type": "string", "minLength": 1 },
+                  "format": { "type": "string", "enum": ["csv", "json", "parquet"] },
+                  "reader_options": {
+                    "type": "object",
+                    "additionalProperties": { "type": ["string", "number", "boolean"] }
+                  },
+                  "recursive_lookup": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "jdbc" } } },
+          "then": {
+            "properties": {
+              "options": {
+                "type": "object",
+                "required": ["url", "driver", "user_env", "password_env"],
+                "properties": {
+                  "url": { "type": "string", "minLength": 1 },
+                  "driver": { "type": "string", "minLength": 1 },
+                  "user_env": { "type": "string", "minLength": 1 },
+                  "password_env": { "type": "string", "minLength": 1 },
+                  "dbtable": { "type": "string" },
+                  "query": { "type": "string" },
+                  "partition_column": { "type": "string" },
+                  "lower_bound": { "type": ["integer", "string"] },
+                  "upper_bound": { "type": ["integer", "string"] },
+                  "num_partitions": { "type": "integer", "minimum": 1 },
+                  "fetch_size": { "type": "integer", "minimum": 1 }
+                },
+                "oneOf": [
+                  { "required": ["dbtable"] },
+                  { "required": ["query"] }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+# =============================================================================
+# Spark layer — Python dependencies
+# =============================================================================
+# PySpark is provided by the runtime image; pinning the version protects
+# local testing and CI from drifting away from the cluster.
+# =============================================================================
+
+pyspark==3.5.1
+pyyaml>=6.0.1
+jsonschema>=4.21.0
+
+# Test / dev
+pytest>=8.0.0
+pytest-mock>=3.12.0

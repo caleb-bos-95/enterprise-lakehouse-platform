@@ -1,0 +1,17 @@
+[
+  "tests/spark/test_committed_registry.py::test_committed_registry_validates",
+  "tests/spark/test_config_loader.py::test_duplicate_names_rejected",
+  "tests/spark/test_config_loader.py::test_invalid_source_name_rejected",
+  "tests/spark/test_config_loader.py::test_jdbc_requires_dbtable_or_query",
+  "tests/spark/test_config_loader.py::test_load_valid_registry_returns_only_enabled",
+  "tests/spark/test_config_loader.py::test_missing_required_options_rejected_by_schema",
+  "tests/spark/test_config_loader.py::test_only_filter_returns_specific_sources",
+  "tests/spark/test_config_loader.py::test_unknown_only_source_raises",
+  "tests/spark/test_handlers_registry.py::test_available_handlers_includes_built_ins",
+  "tests/spark/test_handlers_registry.py::test_every_handler_declares_type_key",
+  "tests/spark/test_handlers_registry.py::test_get_handler_returns_expected_class[file-FileHandler]",
+  "tests/spark/test_handlers_registry.py::test_get_handler_returns_expected_class[jdbc-JdbcHandler]",
+  "tests/spark/test_handlers_registry.py::test_get_handler_unknown_lists_supported",
+  "tests/spark/test_metadata_contract.py::test_all_columns_underscore_prefixed",
+  "tests/spark/test_metadata_contract.py::test_ingestion_columns_match_contract"
+]
